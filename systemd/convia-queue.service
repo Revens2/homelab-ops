@@ -1,0 +1,32 @@
+[Unit]
+Description=Reconciliation de la file d analyse ConvIA (pending_analysis)
+Documentation=file:///srv/docs/plan.md
+After=vault-mirror-sync.service
+
+[Service]
+Type=oneshot
+User=juliann-app
+Group=juliann-app
+Environment=CONVIA_QUEUE_DB=/var/lib/vault-mcp/convia.db
+Environment=CONVIA_RAW_ROOT=/srv/vault-mirror/raw/assets/ConvIA
+Environment=PYTHONPATH=/opt/vault-mcp
+ExecStart=/opt/vault-mcp/venv/bin/python -m vault_mcp.convia_queue
+StandardInput=null
+TimeoutStartSec=10m
+Nice=10
+
+# Le corpus est une entree hostile (adr/0008) : ce service ne fait que hacher des
+# fichiers et ecrire une base, il n a besoin de rien d autre.
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/vault-mcp
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+CapabilityBoundingSet=

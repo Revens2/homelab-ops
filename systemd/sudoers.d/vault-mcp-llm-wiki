@@ -1,0 +1,5 @@
+# Le serveur vault-mcp expose wiki_ingest_start(). Il ne doit pouvoir demarrer QUE
+# le moteur d ingestion llm-wiki -- pas une unite arbitraire, pas un shell.
+# La commande est figee ici argument par argument : `systemctl start --no-block
+# llm-wiki-ingest.service` et rien d autre. Aucun joker, donc rien a detourner.
+juliann-app ALL=(root) NOPASSWD: /usr/bin/systemctl start --no-block llm-wiki-ingest.service

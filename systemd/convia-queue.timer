@@ -1,0 +1,13 @@
+[Unit]
+Description=Reconciliation periodique de la file d analyse ConvIA
+
+[Timer]
+# 5 min : le miroir est rafraichi toutes les 30 min, donc une conversation devient
+# analysable au pire 35 min apres sa capture. Descendre plus bas ne gagnerait rien.
+OnBootSec=5min
+OnUnitActiveSec=5min
+AccuracySec=1min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
