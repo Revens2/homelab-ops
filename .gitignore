@@ -1,5 +1,24 @@
 # Journaux et états locaux
 *.log
 /tmp/
+
+# Environnement / secrets — jamais versionnés
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+credentials*
+secrets*
+tokens*
+
+# Sauvegardes / dumps / fichiers temporaires
+backups/
+*.bak
+*.dump
+
+# Éditeurs / OS
 .DS_Store
 *.swp
