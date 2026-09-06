@@ -1,0 +1,14 @@
+# Applique la demande : retire le marqueur PUIS demarre le moteur.
+#
+# L ordre compte. Retirer le marqueur d abord rearme le .path unit : une demande
+# deposee pendant l ingestion sera donc vue au depot suivant, au lieu d etre
+# perdue parce que le fichier existait deja. `--no-block` : cette unite ne doit
+# pas rester active pendant les heures que dure l ingestion, sinon elle bloque
+# sa propre reactivation.
+[Unit]
+Description=Demarrage du moteur d ingestion LLM Wiki sur demande du MCP
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/rm -f /var/lib/vault-mcp/wiki-ingest.request
+ExecStart=/usr/bin/systemctl start --no-block llm-wiki-ingest.service

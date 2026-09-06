@@ -1,0 +1,15 @@
+# Consomme la DEMANDE d ingestion deposee par vault-mcp (wiki_ingest_start).
+#
+# vault-mcp.service porte NoNewPrivileges=yes : aucun sudo ne peut y aboutir,
+# quelle que soit la regle sudoers. Plutot que d affaiblir le durcissement du
+# seul composant joignable depuis internet, le MCP depose un marqueur et root
+# l applique -- meme separation que le spool d ecriture du vault (adr/0020).
+[Unit]
+Description=Demande d ingestion LLM Wiki deposee par vault-mcp
+
+[Path]
+PathExists=/var/lib/vault-mcp/wiki-ingest.request
+Unit=llm-wiki-ingest-request.service
+
+[Install]
+WantedBy=multi-user.target

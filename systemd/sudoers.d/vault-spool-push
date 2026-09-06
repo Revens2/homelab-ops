@@ -1,0 +1,13 @@
+# Le pousseur du spool (adr/0020) tourne sous juliann et doit pouvoir declencher
+# la reindexation et la synchronisation du miroir. Perimetre volontairement
+# reduit a ces commandes exactes : pas de NOPASSWD: ALL.
+#
+# 2026-09-06 : les deux commandes de reindexation passent en `--no-block`. Sans
+# lui, `systemctl start` attend la fin de l unite ; le pousseur etant un consumer
+# UNIQUE, une intention admin/reindex immobilisait toute la FIFO (37 min mesures
+# le 2026-09-06). La forme bloquante est retiree : elle ne doit plus etre
+# appelable. admin/sync reste SYNCHRONE par conception (adr/0023), donc bloquant.
+juliann ALL=(root) NOPASSWD: /usr/bin/systemctl start --no-block vault-reindex.service
+juliann ALL=(root) NOPASSWD: /usr/bin/systemctl start vault-mirror-sync.service
+juliann ALL=(root) NOPASSWD: /usr/bin/systemd-run --unit=vault-reindex-debounce --on-active=10min --timer-property=AccuracySec=30s systemctl start --no-block vault-reindex.service
+juliann ALL=(root) NOPASSWD: /usr/bin/systemd-run --unit=vault-mirror-sync-demande --on-active=5s systemctl start vault-mirror-sync.service
