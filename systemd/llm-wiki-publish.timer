@@ -1,0 +1,14 @@
+# Filet de securite du .path : si le marqueur a ete perdu (redemarrage pendant
+# une ingestion, echec d ecriture du marqueur), le wiki finit quand meme sur
+# Drive. `rclone copy` ne transfere que les differences : un tir a vide coute
+# une enumeration, pas un transfert.
+[Unit]
+Description=Publication periodique du wiki LLM vers Google Drive (filet du .path)
+
+[Timer]
+OnCalendar=*-*-* 04:20:00
+Persistent=true
+RandomizedDelaySec=600
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,15 @@
+# Consomme la DEMANDE de publication deposee par llm_wiki_ingest.sh (passe 2).
+#
+# Le moteur (User=llmingest) n a pas le remote rclone `gdrive:` -- il n a que
+# le wiki en ecriture. Le publieur (User=juliann) a le remote mais n ecrit pas
+# le wiki. Meme separation que llm-wiki-ingest-request (adr/0020) : un marqueur
+# franchit la frontiere, jamais un droit.
+[Unit]
+Description=Demande de publication LLM Wiki deposee par le moteur d ingestion
+
+[Path]
+PathExists=/var/lib/llm-wiki/publish.request
+Unit=llm-wiki-publish.service
+
+[Install]
+WantedBy=multi-user.target

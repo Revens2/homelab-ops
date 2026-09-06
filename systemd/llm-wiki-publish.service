@@ -1,0 +1,21 @@
+# Publie /srv/obsidian-vault/wiki vers Google Drive (rclone copy --update).
+#
+# Le script retire lui-meme le marqueur /var/lib/llm-wiki/publish.request, mais
+# SEULEMENT en cas de succes : un echec Drive laisse le marqueur en place, donc
+# le .path reste arme et la publication est retentee. Aucune perte : rien n est
+# jamais supprime cote local.
+[Unit]
+Description=Publication du wiki LLM vers Google Drive
+After=network-online.target
+Wants=network-online.target
+OnFailure=notify-failure@%n.service
+
+[Service]
+Type=oneshot
+User=juliann
+Group=juliann
+ExecStart=/usr/local/bin/llm_wiki_publish.sh
+TimeoutStartSec=1h
+StandardInput=null
+Nice=10
+IOSchedulingClass=idle

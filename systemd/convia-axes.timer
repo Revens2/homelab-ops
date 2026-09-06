@@ -1,0 +1,12 @@
+# Avant convia-reco.timer (08:14) : le rapport du jour doit exister quand le
+# moteur de recommandations ouvre sa fenetre de 7 jours.
+[Unit]
+Description=Derivation quotidienne des axes ConvIA depuis les analyses ChatGPT
+
+[Timer]
+OnCalendar=*-*-* 07:40:00
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target
