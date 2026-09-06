@@ -21,11 +21,33 @@ mkdir -p "$DEST" "$TRASH_ROOT"
 # protege de rien : un `sync` demarrant pendant qu une intention est en vol vers
 # Drive supprimerait du miroir la note fraichement creee. L attente est alignee
 # sur TimeoutStartSec=1h de l unite.
+# TICKET DE PRIORITE. Pose AVANT de se mettre en attente du verrou.
+#
+# `flock` n est pas equitable : un candidat en attente n a aucune garantie de
+# passer avant un nouvel arrivant. vault_spool_push.sh est declenche par un
+# .path a chaque intention deposee et par un timer toutes les ~13 s ; quand la
+# tache ChatGPT produit des analyses en rafale, ses passages courts se
+# re-servent en boucle et cette synchro attend.
+#
+# Mesure du 2026-09-06 : run demarre a 19:00:56, verrou obtenu a 19:57:33 --
+# 56 min 37 s d attente pour un `-w 3600`. Il est passe a 3 min 23 s de
+# l expiration, apres quoi le miroir aurait echoue et alerte sur Telegram, et le
+# RAG serait reste en retard jusqu au passage suivant.
+#
+# Le ticket ne prend aucun verrou et n autorise aucune ecriture concurrente : il
+# dit seulement au pousseur « rends la main a la fin de l intention en cours ».
+TICKET="${VAULT_LOCK_WANTED:-/run/lock/vault-mirror.wanted}"
+: > "$TICKET" 2>/dev/null || true
+# Retire meme en cas d interruption : un ticket oublie ferait ceder le pousseur
+# apres chaque intention, indefiniment.
+trap 'rm -f "$TICKET"' EXIT
+
 exec 9>/run/lock/vault-mirror.lock
 if ! flock -w 3600 9; then
   echo "verrou vault-mirror non obtenu"
   exit 1
 fi
+rm -f "$TICKET"
 
 # Exclusions :
 #   .obsidian/.trash/.temp/.git -- etat local d Obsidian, aucune valeur semantique

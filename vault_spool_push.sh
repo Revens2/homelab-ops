@@ -459,9 +459,30 @@ fi
 BESOIN_REINDEX=0
 
 # Tri lexicographique = tri chronologique : le nom porte time_ns sur 19 chiffres.
+# Ticket de priorite pose par vault_mirror_sync.sh : il attend le verrou.
+# Frais = pose il y a moins de CESSION_TICKET_MAX_S. Un ticket plus vieux est
+# un residu (sync tue avant son trap) et doit etre ignore, sinon le pousseur
+# cederait apres chaque intention pour toujours.
+CESSION_TICKET="${VAULT_LOCK_WANTED:-/run/lock/vault-mirror.wanted}"
+CESSION_TICKET_MAX_S="${CESSION_TICKET_MAX_S:-900}"
+sync_attend() {
+  [ -f "$CESSION_TICKET" ] || return 1
+  local age
+  age=$(( $(date +%s) - $(stat -c %Y "$CESSION_TICKET" 2>/dev/null || echo 0) ))
+  [ "$age" -ge 0 ] && [ "$age" -le "$CESSION_TICKET_MAX_S" ]
+}
+
+# La liste est FIGEE avant le verrou : ce passage ne traite que ce qui etait
+# depose au demarrage, et les intentions arrivees entre-temps sont deja prevues
+# pour le declenchement suivant. Ceder en cours de vidange ne perd donc rien --
+# c est le meme chemin que celui qui existait deja pour les nouvelles arrivees.
 for fichier in $(printf '%s\n' "${en_file[@]}" | sort); do
   [ -f "$fichier" ] || continue
   traiter "$fichier"
+  if sync_attend; then
+    journal "cession du verrou : vault-mirror-sync attend, reprise au prochain declenchement"
+    break
+  fi
 done
 
 # Purges alignees sur la retention de vault_mirror_sync.sh.
