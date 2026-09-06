@@ -15,7 +15,12 @@ Type=oneshot
 User=juliann
 Group=juliann
 ExecStart=/usr/local/bin/llm_wiki_publish.sh
-TimeoutStartSec=1h
+# 6 h, pas 1 h. La convergence initiale mesuree le 2026-09-06 (3319 fiches vers
+# Google Drive) tient mal dans une heure : le debit reel oscille entre 4 et 40
+# fichiers/min selon l etranglement Drive. Avec 1 h, systemd tuait la passe en
+# vol, le .path la relancait aussitot -- une boucle qui ne converge jamais.
+# En regime etabli une passe ne transfere qu une poignee de fiches.
+TimeoutStartSec=6h
 StandardInput=null
 Nice=10
 IOSchedulingClass=idle
