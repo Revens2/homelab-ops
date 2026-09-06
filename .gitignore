@@ -1,0 +1,5 @@
+# Journaux et états locaux
+*.log
+/tmp/
+.DS_Store
+*.swp
