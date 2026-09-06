@@ -92,15 +92,33 @@ if ! flock -w 1800 9; then
     exit 1
 fi
 
-# --backup-dir : toute version Drive ecrasee part dans une corbeille datee au
-# lieu d etre perdue. C est ce qui rend la premiere publication de masse
-# (3319 fiches) reversible fichier par fichier.
-STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
-BACKUP_DIR="${LLM_WIKI_BACKUP:-gdrive:Obsidian Vault/.trash-wiki-publish}/${STAMP}"
+# PAS de --backup-dir, et c est un choix mesure.
+#
+# Premiere tentative, 2026-09-06 17:05 : `--backup-dir` fait, pour chaque fiche
+# a remplacer, un DEPLACEMENT server-side (instantane) puis un UPLOAD (lent).
+# Sur 3319 fiches, les deplacements ont pris ~400 fiches d avance sur les
+# uploads en huit minutes. Autrement dit : plusieurs centaines de notes
+# ABSENTES de Drive pendant des heures, et vault-mirror-sync (toutes les 30 min)
+# aurait propage ces absences dans le miroir, donc dans le RAG.
+#
+# La reversibilite ne se paie donc pas ici. Elle vient d ailleurs :
+#   - /srv/vault-mirror/wiki EST deja une copie locale fidele de ce que Drive
+#     contient ; c est la sauvegarde, et elle est gratuite ;
+#   - `--update` protege ce qui est plus recent cote Drive ;
+#   - `copy` ne supprime jamais rien.
+# Sans --backup-dir, rclone ecrase en place : la fiche n est jamais absente.
+#
+# LLM_WIKI_BACKUP reste disponible pour une passe exceptionnelle ou l on
+# accepte le trou en echange d une corbeille datee.
+BACKUP=()
+if [ -n "${LLM_WIKI_BACKUP:-}" ]; then
+    BACKUP=(--backup-dir "${LLM_WIKI_BACKUP}/$(date -u +%Y%m%dT%H%M%SZ)")
+    log "corbeille demandee : ${LLM_WIKI_BACKUP} (des notes seront absentes le temps du transfert)"
+fi
 
 log "publication ${SRC} -> ${DEST} (copy --update, dry-run=${DRY_RUN})"
-log "corbeille des versions ecrasees : ${BACKUP_DIR}"
-if ! rclone copy "$SRC" "$DEST" --update --backup-dir "$BACKUP_DIR"         "${EXCLUDES[@]}" "${TUNING[@]}"; then
+if ! rclone copy "$SRC" "$DEST" --update "${BACKUP[@]+"${BACKUP[@]}"}" \
+        "${EXCLUDES[@]}" "${TUNING[@]}"; then
     err "ECHEC rclone copy -- publication reportee, rien n est perdu en local"
     : > "$PENDING"
     exit 1
