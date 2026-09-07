@@ -220,7 +220,20 @@ traiter() {
 
   case "$op" in
     admin/reindex)
-      sudo -n systemctl start vault-reindex.service \
+      # `--no-block` N EST PAS COSMETIQUE. Sans lui, `systemctl start` attend la
+      # fin de l unite -- et si une reindexation tourne deja, il attend la fin de
+      # CELLE-LA. Le pousseur est un consumer UNIQUE : cette attente immobilise
+      # toute la FIFO. Mesure du 2026-09-06 : l intention e9f18115727a
+      # (admin/reindex, deposee a 13:53:48) a bloque le pousseur 37 min 11 s, et
+      # l ecriture ordinaire d35504f3218d, deposee a 14:09:08, n a ete appliquee
+      # qu a 14:32:45 -- derriere elle, pas a cause d elle.
+      #
+      # Persistance et indexation semantique sont deux operations distinctes :
+      # une demande de reindexation est une DEMANDE, le recu `ok` signifie
+      # « reindexation demandee/demarree », pas « index reconstruit ». Le
+      # rendez-vous de coalescence est le job systemd : un second start pendant
+      # qu un job est deja en file est un no-op.
+      sudo -n systemctl start --no-block vault-reindex.service \
         && terminer_ok "$fichier" "$id" \
         || terminer_echec "$fichier" "$id" "reindexation refusee"
       BESOIN_REINDEX=0
@@ -446,9 +459,30 @@ fi
 BESOIN_REINDEX=0
 
 # Tri lexicographique = tri chronologique : le nom porte time_ns sur 19 chiffres.
+# Ticket de priorite pose par vault_mirror_sync.sh : il attend le verrou.
+# Frais = pose il y a moins de CESSION_TICKET_MAX_S. Un ticket plus vieux est
+# un residu (sync tue avant son trap) et doit etre ignore, sinon le pousseur
+# cederait apres chaque intention pour toujours.
+CESSION_TICKET="${VAULT_LOCK_WANTED:-/run/lock/vault-mirror.wanted}"
+CESSION_TICKET_MAX_S="${CESSION_TICKET_MAX_S:-900}"
+sync_attend() {
+  [ -f "$CESSION_TICKET" ] || return 1
+  local age
+  age=$(( $(date +%s) - $(stat -c %Y "$CESSION_TICKET" 2>/dev/null || echo 0) ))
+  [ "$age" -ge 0 ] && [ "$age" -le "$CESSION_TICKET_MAX_S" ]
+}
+
+# La liste est FIGEE avant le verrou : ce passage ne traite que ce qui etait
+# depose au demarrage, et les intentions arrivees entre-temps sont deja prevues
+# pour le declenchement suivant. Ceder en cours de vidange ne perd donc rien --
+# c est le meme chemin que celui qui existait deja pour les nouvelles arrivees.
 for fichier in $(printf '%s\n' "${en_file[@]}" | sort); do
   [ -f "$fichier" ] || continue
   traiter "$fichier"
+  if sync_attend; then
+    journal "cession du verrou : vault-mirror-sync attend, reprise au prochain declenchement"
+    break
+  fi
 done
 
 # Purges alignees sur la retention de vault_mirror_sync.sh.
@@ -463,10 +497,18 @@ flock -u 9
 # avec un nom fixe REMPLACE le timer transitoire s il existe deja : dix
 # ecritures en dix minutes ne produisent qu une seule reindexation, dix minutes
 # apres la derniere. Debounce vrai, sans etat applicatif a gerer.
+#
+# `--no-block` ici aussi, pour une raison differente et tout aussi concrete : sans
+# lui, l unite transitoire reste ACTIVE pendant toute la reindexation (constate le
+# 2026-09-06 : vault-reindex-debounce.service bloque sur `systemctl start` de
+# 14:42:45 a la fin de la passe). Or le nom `--unit=vault-reindex-debounce` est
+# fixe : tant qu il est occupe, tout re-armement echoue et le journal se contente
+# d un « debounce de reindexation non arme » (constate a 13:53:47). Les ecritures
+# faites pendant une reindexation perdaient donc silencieusement leur indexation.
 if [ "$BESOIN_REINDEX" = "1" ]; then
   sudo -n systemd-run --unit=vault-reindex-debounce --on-active=10min \
               --timer-property=AccuracySec=30s \
-              systemctl start vault-reindex.service >/dev/null 2>&1 \
+              systemctl start --no-block vault-reindex.service >/dev/null 2>&1 \
     || journal "debounce de reindexation non arme"
 fi
 
