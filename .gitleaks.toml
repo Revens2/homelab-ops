@@ -1,0 +1,12 @@
+# Config gitleaks du depot homelab-ops.
+# L'historique (commit 04cbf807, arborescence supprimee depuis) contient
+# l'outil convia-sanitize : son role est de REDIGER les cles privees, et ses
+# tests portent des echantillons volontairement en forme de cle privee. Ce ne
+# sont pas des secrets. Autorisation par chemin, limitee a cette arborescence
+# disparue de l'arbre courant.
+title = "homelab-ops gitleaks"
+[allowlist]
+  description = "fixtures de redaction convia-sanitize (historique uniquement)"
+  paths = [
+    '''convia-sanitize/''',
+  ]
