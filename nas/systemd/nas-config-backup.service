@@ -1,0 +1,7 @@
+[Unit]
+Description=Backup config NAS + dump DB Nextcloud (eMMC + restic Drive)
+OnFailure=
+[Service]
+Type=oneshot
+Nice=10
+ExecStart=/usr/local/sbin/nas-config-backup

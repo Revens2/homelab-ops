@@ -1,0 +1,3 @@
+[Unit]
+After=netbird.service tailscaled.service network-online.target
+Wants=network-online.target

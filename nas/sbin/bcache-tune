@@ -1,0 +1,19 @@
+#!/bin/sh
+# Reglages bcache NAS (writeback conservateur, SSD derriere pont USB)
+B=/sys/block/bcache0/bcache
+# 15/09 soir : cache Crucial retiré (SSD en branche mergerfs), rien à régler sans cache
+[ -d /sys/fs/bcache ] && ls -d /sys/fs/bcache/*-*-*-*-* >/dev/null 2>&1 || { logger -t bcache-tune "pas de cache set, rien a faire"; exit 0; }
+for i in $(seq 1 90); do
+  [ -e $B/state ] && [ "$(cat $B/state)" != "no cache" ] && break
+  sleep 1
+done
+echo writeback > $B/cache_mode
+echo 1         > $B/writeback_percent
+echo 10        > $B/writeback_delay
+echo 4194304   > $B/sequential_cutoff
+echo 20480     > $B/writeback_rate_minimum
+for c in /sys/fs/bcache/*-*-*-*-*/; do
+  echo 0 > ${c}congested_read_threshold_us
+  echo 0 > ${c}congested_write_threshold_us
+done
+logger -t bcache-tune "state=$(cat $B/state) mode=writeback wp=1 delay=10 ratemin=10MB/s cutoff=4M"

@@ -1,0 +1,2 @@
+#!/bin/bash
+find /srv/storage -xdev -type f ! -path "/srv/storage/lost+found/*" \( ! -user nasowner -o ! -group nasusers -o ! -perm -g+w \) -print0 | xargs -0 -n 500 sh -c 'chown nasowner:nasusers "$@" && chmod g+w "$@" && setfacl -m u:www-data:rwX,g:nasusers:rwX "$@"; sleep 0.3' _

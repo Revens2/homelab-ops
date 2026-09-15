@@ -1,0 +1,40 @@
+#!/bin/bash
+# nas-ssd-mover — libère le SSD de la branche mergerfs en déplaçant vers le HDD
+# les fichiers hors Rapide/ les moins récemment utilisés. Rapide/ n'est jamais déplacé.
+# À lancer via nas-heavy (verrou global + pause heavy-io).
+set -euo pipefail
+SSD=${SSD:-/srv/tier/ssd}
+HDD=${HDD:-/srv/tier/hdd}
+HIGH=${HIGH:-75}      # déclenche au-dessus de ce % d'occupation SSD
+LOW=${LOW:-55}        # s'arrête sous ce %
+MIN_AGE=${MIN_AGE:-15} # minutes sans modification (fichiers en cours d'écriture ignorés)
+
+mountpoint -q "$SSD" && mountpoint -q "$HDD" || { echo "branches non montées" >&2; exit 1; }
+pct() { df --output=pcent "$SSD" | tail -1 | tr -dc 0-9; }
+
+used=$(pct)
+if [ "$used" -lt "$HIGH" ]; then
+  echo "SSD ${used}% < ${HIGH}% : rien à faire"
+  exit 0
+fi
+echo "SSD ${used}% >= ${HIGH}% : déplacement jusqu'à ${LOW}%"
+
+cd "$SSD"
+moved=0
+while IFS= read -r -d '' line; do
+  [ "$(pct)" -le "$LOW" ] && break
+  f=${line#* }
+  rsync -aAXH --relative --remove-source-files -- "./$f" "$HDD/"
+  moved=$((moved + 1))
+done < <(find . -xdev -type f -mmin +"$MIN_AGE" \
+           -not -path './Rapide/*' -not -path './lost+found/*' \
+           -printf '%A@ %P\0' | sort -z -n)
+
+# Dossiers vides côté SSD : supprimés seulement s'ils existent aussi côté HDD.
+find . -xdev -mindepth 1 -depth -type d -empty \
+     -not -path './Rapide' -not -path './Rapide/*' -not -path './lost+found' -print0 |
+  while IFS= read -r -d '' d; do
+    [ -d "$HDD/${d#./}" ] && rmdir -- "$d" 2>/dev/null || true
+  done
+
+echo "déplacés=$moved SSD=$(pct)%"

@@ -1,0 +1,12 @@
+[Unit]
+Description=Reglages bcache (writeback conservateur)
+After=dev-bcache0.device dev-disk-by\x2dpartlabel-bcache\x2dcache.device
+Wants=dev-disk-by\x2dpartlabel-bcache\x2dcache.device
+BindsTo=dev-bcache0.device
+Before=srv-storage.mount
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/bcache-tune
+RemainAfterExit=yes
+[Install]
+WantedBy=dev-bcache0.device

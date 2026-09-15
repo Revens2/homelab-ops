@@ -1,0 +1,10 @@
+[Unit]
+Description=Relance quotidienne de la sauvegarde Seagate vers Google Drive
+
+[Timer]
+OnCalendar=*-*-* 09:30:00
+Persistent=true
+RandomizedDelaySec=15m
+
+[Install]
+WantedBy=timers.target

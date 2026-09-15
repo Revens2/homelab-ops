@@ -1,0 +1,7 @@
+[Unit]
+Description=NAS restic data check (via nas-heavy)
+[Service]
+Type=oneshot
+Nice=19
+IOSchedulingClass=idle
+ExecStart=/usr/local/sbin/nas-heavy nas-data-check /usr/local/sbin/nas-data-backup check

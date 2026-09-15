@@ -1,0 +1,26 @@
+#!/bin/bash
+# nas-data-backup : backup restic local complet (compression zstd + dédup).
+# Source : /srv/storage = vue mergerfs (branches SSD + HDD, Rapide inclus) → chemins logiques stables à la restauration.
+# Toujours lancé via nas-heavy (verrou global + pause). NE PAS ACTIVER avant nouvelle carte + gate.
+set -euo pipefail
+export RESTIC_PASSWORD_FILE=/etc/nas/restic.pass
+export RESTIC_REPOSITORY=${RESTIC_REPOSITORY:-/srv/backup/restic-nas}
+export GOGC=20
+STATE=/var/lib/nas/heavy
+fail(){ /usr/local/bin/notify-telegram.sh ERROR "nas-data-backup échec: $*" || true; exit 1; }
+trap 'fail "ligne $LINENO"' ERR
+[ -e /etc/nas/data-backup.gate-ok ] || fail "gate capacité non validé (/etc/nas/data-backup.gate-ok absent)"
+mountpoint -q /srv/storage && mountpoint -q /srv/tier/ssd && mountpoint -q /srv/tier/hdd && mountpoint -q /srv/backup || fail "montages absents"
+restic cat config >/dev/null 2>&1 || restic init --repository-version 2
+case "${1:-backup}" in
+  backup)
+    restic backup --one-file-system --compression auto --tag data \
+      --exclude /srv/storage/lost+found --exclude '/srv/storage/.corbeille' \
+      /srv/storage
+    restic forget --tag data --keep-daily 7 --keep-weekly 4 --keep-monthly 6 --prune
+    restic stats --mode raw-data latest | tail -4 > "$STATE/nas-data-backup.stats"
+    date -Is > "$STATE/nas-data-backup.ok" ;;
+  check)
+    restic check --read-data-subset=2%
+    date -Is > "$STATE/nas-data-check.ok" ;;
+esac

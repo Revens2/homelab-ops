@@ -1,0 +1,8 @@
+[Unit]
+Description=Backup config NAS quotidien
+[Timer]
+OnCalendar=*-*-* 02:30
+RandomizedDelaySec=10m
+Persistent=true
+[Install]
+WantedBy=timers.target

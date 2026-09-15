@@ -1,0 +1,9 @@
+[Unit]
+Description=Déplace les fichiers froids SSD vers Seagate (mergerfs)
+RequiresMountsFor=/srv/tier/ssd /srv/tier/hdd
+
+[Service]
+Type=oneshot
+Nice=19
+IOSchedulingClass=idle
+ExecStart=/usr/local/sbin/nas-heavy ssd-mover /usr/local/sbin/nas-ssd-mover

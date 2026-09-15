@@ -1,0 +1,69 @@
+#!/bin/bash
+# Etat du stockage NAS unifie : /srv/storage = mergerfs (branche SSD + branche HDD)
+# Identifiants disques dans /etc/nas/storage.env : HDD_ID=... SSD_ID=... (chemins /dev/disk/by-id)
+# shellcheck disable=SC1091
+[ -r /etc/nas/storage.env ] && . /etc/nas/storage.env
+SSD=/srv/tier/ssd; HDD=/srv/tier/hdd
+c_bold=$(tput bold 2>/dev/null); c_off=$(tput sgr0 2>/dev/null)
+
+echo "${c_bold}=== NAMESPACE ===${c_off}"
+findmnt -no SOURCE,TARGET,FSTYPE /srv/storage 2>/dev/null || echo "  /srv/storage NON MONTE (!!)"
+df -h --output=size,used,avail,pcent /srv/storage 2>/dev/null | tail -1
+for b in "$SSD" "$HDD"; do
+  mountpoint -q "$b" && echo "  $(basename "$b") : $(df -h --output=used,avail,pcent "$b" | tail -1)" || echo "  $b NON MONTE (!!)"
+done
+
+echo
+echo "${c_bold}=== SSD ===${c_off}"
+if mountpoint -q "$SSD"; then
+  echo "  Rapide/            : $(sudo du -sh "$SSD/Rapide" 2>/dev/null | cut -f1) (jamais deplace)"
+  echo "  Hors Rapide (SSD)  : $(sudo du -sh --exclude=Rapide --exclude=lost+found "$SSD" 2>/dev/null | cut -f1) <- UNIQUEMENT sur SSD jusqu'au mover"
+  echo "  Mover              : timer $(systemctl is-active nas-ssd-mover.timer) / derniere $(systemctl show nas-ssd-mover.service -p ExecMainExitTimestamp --value)"
+fi
+
+echo
+echo "${c_bold}=== DISQUES ===${c_off}"
+for d in ${HDD_ID:-} ${SSD_ID:-}; do
+  n=$(basename $d)
+  h=$(sudo smartctl -H "$d" 2>/dev/null | grep -E "overall-health" | awk -F: "{print \$2}")
+  [ -z "$h" ] && h=$(sudo smartctl -H -d sat "$d" 2>/dev/null | grep -E "overall-health" | awk -F: "{print \$2}")
+  echo "  ${n:0:45} :${h:- illisible (pont USB)}"
+done
+
+echo
+echo "${c_bold}=== ERREURS RECENTES ===${c_off}"
+e=$(dmesg -T --level=err,warn 2>/dev/null | grep -iE "I/O error|DID_ERROR|ata[0-9]+.*(reset|failed)|usb .*reset|bcache.*error|EXT4-fs error" | tail -5)
+[ -n "$e" ] && { echo "$e"; for s in $(echo "$e" | grep -oE "dev sd[a-z]+" | sort -u | cut -d" " -f2); do echo "   -> $s = $(lsblk -dno MODEL,SERIAL /dev/$s) $(lsblk -no MOUNTPOINT /dev/$s | xargs)"; done; } || echo "  aucune"
+
+echo
+echo "${c_bold}=== SAUVEGARDES ===${c_off}"
+echo "  Backup local (pool)  : $(df -h --output=used,avail,pcent /srv/backup 2>/dev/null | tail -1)"
+echo "  Drive (timer rclone) : $(systemctl is-enabled rclone-seagate.timer 2>/dev/null) / derniere exec $(systemctl show rclone-seagate.service -p ExecMainExitTimestamp --value)"
+
+# --- extension 2026-09-15 : Nextcloud, backups, verrou I/O ---
+age(){ [ -f "$1" ] || { echo "jamais"; return; }; t=$(date -d "$(cat "$1")" +%s 2>/dev/null) || { echo "?"; return; }; echo "$(cat "$1" | cut -c1-16) (il y a $(( ($(date +%s)-t)/3600 )) h)"; }
+H=/var/lib/nas/heavy
+echo
+echo "${c_bold}=== NEXTCLOUD ===${c_off}"
+echo "  Containers   : $(sudo docker ps --filter name=nextcloud --format '{{.Names}}={{.Status}}' 2>/dev/null | sed 's/nextcloud-//;s/Up [^(]*//' | tr '\n' ' ')"
+echo "  status.php   : $(curl -s -m 5 -o /dev/null -w '%{http_code}' http://127.0.0.1:8082/status.php)"
+echo "  Dernier scan : $(age $H/nc-scan.ok)"
+echo "  Erreurs log 24h : $(sudo awk -v d="$(date -u -d '-24 hours' +%Y-%m-%dT%H)" -F'"time":"' 'NF>1 && substr($2,1,13)>=d && /"level":[34]/' /opt/appdata/nextcloud/data/nextcloud.log 2>/dev/null | wc -l)"
+echo "  Memories index.mode : $(sudo docker exec -u www-data nextcloud-app-1 php occ config:app:get memories index.mode 2>/dev/null) (0 = pause)"
+echo
+echo "${c_bold}=== OPERATIONS LOURDES ===${c_off}"
+[ -e /etc/nas/heavy-io.paused ] && echo "  PAUSE ACTIVE : $(head -1 /etc/nas/heavy-io.paused)" || echo "  Pause : non"
+echo "  Verrou       : $(o=$(cat /run/lock/nas-heavy.owner 2>/dev/null); echo "${o:-libre}")"
+echo "  Dernières    : $(tail -3 /var/log/nas-heavy.log 2>/dev/null | cut -c1-90 | tr '\n' '|')"
+echo
+echo "${c_bold}=== BACKUP LOCAL (restic) ===${c_off}"
+echo "  Gate capacité  : $([ -e /etc/nas/data-backup.gate-ok ] && echo validé || echo 'NON VALIDÉ (backup data inactif)')"
+echo "  Dernier succès : $(age $H/nas-data-backup.ok)"
+echo "  Dernier check  : $(age $H/nas-data-check.ok)"
+[ -f $H/nas-data-backup.stats ] && sed 's/^/  /' $H/nas-data-backup.stats
+echo "  Config+DB      : $(age $H/nas-config-backup.ok)  [$(sudo ls -1 /var/backups/nas-config 2>/dev/null | wc -l) versions eMMC + restic Drive]"
+echo
+echo "${c_bold}=== GOOGLE DRIVE ===${c_off}"
+echo "  Dernière synchro OK : $(age $H/rclone-drive.ok)"
+echo "  Service : $(systemctl show -p Result --value rclone-seagate.service) / timer $(systemctl is-enabled rclone-seagate.timer)"
+for f in $H/*.fail; do [ -e "$f" ] && echo "  ECHEC $(basename $f .fail) : $(cat $f)"; done

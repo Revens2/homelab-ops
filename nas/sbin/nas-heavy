@@ -1,0 +1,20 @@
+#!/bin/bash
+# nas-heavy <nom> <commande...>
+# Sérialise les grosses opérations I/O (backup, rclone, scan NC, check) par un verrou global.
+# Si /etc/nas/heavy-io.paused existe : saute l'opération (exit 0) et le journalise.
+set -u
+NAME=${1:?nom}; shift
+LOCK=/run/lock/nas-heavy.lock
+PAUSE=/etc/nas/heavy-io.paused
+STATE=/var/lib/nas/heavy
+mkdir -p "$STATE"
+log(){ logger -t nas-heavy "[$NAME] $*"; echo "$(date -Is) [$NAME] $*" >> /var/log/nas-heavy.log; }
+if [ -e "$PAUSE" ] && [ "${NAS_HEAVY_FORCE:-0}" != 1 ]; then log "SKIP pause active: $(head -1 "$PAUSE")"; exit 0; fi
+exec 9>"$LOCK"
+if ! flock -w "${NAS_HEAVY_WAIT:-7200}" 9; then log "ECHEC verrou occupé par: $(cat /run/lock/nas-heavy.owner 2>/dev/null)"; exit 75; fi
+echo "$NAME pid $$ depuis $(date -Is)" > /run/lock/nas-heavy.owner
+log START
+"$@"; RC=$?
+if [ $RC -eq 0 ]; then log "OK"; date -Is > "$STATE/$NAME.ok"; else log "ECHEC rc=$RC"; echo "$(date -Is) rc=$RC" > "$STATE/$NAME.fail"; fi
+: > /run/lock/nas-heavy.owner
+exit $RC

@@ -1,0 +1,35 @@
+#!/bin/bash
+# nas-config-backup : dump PostgreSQL Nextcloud + configs NAS nécessaires à une restauration.
+# Destination 1 : /var/backups/nas-config (eMMC système, hors carte disques), rétention 14.
+# Destination 2 : repo restic chiffré sur Google Drive (rclone:gdrive:<DRIVE_FOLDER>).
+set -euo pipefail
+TS=$(date +%Y%m%d-%H%M)
+DST=/var/backups/nas-config/$TS
+STATE=/var/lib/nas/heavy
+RCLONE_CONF=/home/nasowner/.config/rclone/rclone.conf
+export RESTIC_PASSWORD_FILE=/etc/nas/restic.pass
+export RESTIC_REPOSITORY=rclone:gdrive:<DRIVE_FOLDER>
+export RCLONE_CONFIG=$RCLONE_CONF
+fail(){ /usr/local/bin/notify-telegram.sh ERROR "nas-config-backup échec: $*" || true; echo "$(date -Is) $*" > "$STATE/nas-config-backup.fail"; exit 1; }
+trap 'fail "ligne $LINENO"' ERR
+umask 077
+mkdir -p "$DST" "$STATE"
+cd /opt/stacks/nextcloud
+C=$(docker compose ps -q db)
+docker exec "$C" sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' > "$DST/nextcloud-db.dump"
+docker cp "$DST/nextcloud-db.dump" "$C:/tmp/verify.dump"
+N=$(docker exec "$C" sh -c 'pg_restore -l /tmp/verify.dump | grep -c "TABLE DATA"; rm -f /tmp/verify.dump')
+[ "$N" -gt 50 ] || fail "dump invalide ($N tables)"
+tar --warning=no-file-changed -czf "$DST/configs.tar.gz" \
+  /etc/fstab /etc/samba /etc/systemd/system /etc/cron.d /etc/tmpfiles.d /etc/nas /etc/nas-telegram.env \
+  /etc/snapraid.conf /var/lib/netbird /etc/ssh/sshd_config \
+  /opt/stacks /opt/appdata/nextcloud/html/config \
+  /usr/local/bin /usr/local/sbin /var/lib/samba/private "$RCLONE_CONF" || [ $? -eq 1 ]
+docker exec -u www-data nextcloud-app-1 php occ config:list --private > "$DST/nextcloud-config-list.json"
+( cd "$DST" && sha256sum * > SHA256SUMS )
+ls -1d /var/backups/nas-config/*/ | head -n -14 | xargs -r rm -rf
+restic cat config >/dev/null 2>&1 || restic init >/dev/null
+restic backup --quiet --tag config "$DST"
+restic forget --quiet --tag config --keep-daily 14 --keep-weekly 8 --keep-monthly 12 --prune
+( umask 022; date -Is > "$STATE/nas-config-backup.ok" ); rm -f "$STATE/nas-config-backup.fail"
+echo "OK $DST $(du -sh "$DST" | cut -f1) dump_tables=$N"
