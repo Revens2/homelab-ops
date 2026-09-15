@@ -15,7 +15,7 @@ restic cat config >/dev/null 2>&1 || restic init --repository-version 2
 case "${1:-backup}" in
   backup)
     restic backup --one-file-system --compression auto --tag data \
-      --exclude /srv/storage/lost+found --exclude '/srv/storage/.corbeille' \
+      --exclude /srv/storage/lost+found --exclude '/srv/storage/.corbeille' --exclude /srv/storage/Non-sauvegarde \
       /srv/storage
     restic forget --tag data --keep-daily 7 --keep-weekly 4 --keep-monthly 6 --prune
     restic stats --mode raw-data latest | tail -4 > "$STATE/nas-data-backup.stats"
