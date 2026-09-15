@@ -8,7 +8,7 @@ DST=/var/backups/nas-config/$TS
 STATE=/var/lib/nas/heavy
 RCLONE_CONF=/home/nasowner/.config/rclone/rclone.conf
 export RESTIC_PASSWORD_FILE=/etc/nas/restic.pass
-export RESTIC_REPOSITORY=rclone:gdrive:<DRIVE_FOLDER>
+export RESTIC_REPOSITORY="rclone:gdrive:${DRIVE_FOLDER:?}"
 export RCLONE_CONFIG=$RCLONE_CONF
 fail(){ /usr/local/bin/notify-telegram.sh ERROR "nas-config-backup échec: $*" || true; echo "$(date -Is) $*" > "$STATE/nas-config-backup.fail"; exit 1; }
 trap 'fail "ligne $LINENO"' ERR
