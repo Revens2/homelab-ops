@@ -13,7 +13,8 @@ Debian 12, portable reconverti. Configuration non secrète ; identifiants disque
 ```
 
 - Écriture : `category.create=ff` + `minfreespace=40G` → nouveaux fichiers sur le SSD tant qu'il reste 40 G, sinon HDD.
-- `Rapide/` n'existe que sur la branche SSD et n'est jamais déplacé : il peut occuper presque tout le SSD.
+- `Rapide/` : dossier de la branche SSD monté en bind sur `/srv/storage/Rapide`, jamais déplacé, peut occuper presque tout le SSD. Le bind est nécessaire : sans lui, un `mv` depuis le HDD vers Rapide renommerait sur la branche HDD (ou échouerait).
+- Un déplacement à l'intérieur du stockage est un simple renommage sur la même branche : un fichier du HDD reste sur le HDD. Une copie crée un nouveau fichier, donc sur le SSD.
 - `nas-ssd-mover` (timer horaire) : au-delà de 75 % d'occupation SSD, déplace les fichiers hors `Rapide/` les moins accédés vers le HDD jusqu'à 55 %. Chemin logique inchangé.
 - `posix_acl=true` est obligatoire sur le montage mergerfs, sinon les ACL (www-data de Nextcloud) sont ignorées.
 - Ce n'est pas un cache : un fichier récent hors `Rapide/` n'existe que sur le SSD jusqu'au passage du mover. La copie hors site (rclone → Drive) lit `/srv/storage` et exclut `Rapide/`.

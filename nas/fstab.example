@@ -3,6 +3,8 @@ UUID=<HDD_FS_UUID>  /srv/tier/hdd  ext4  rw,noatime,nofail,x-systemd.device-time
 UUID=<SSD_FS_UUID>  /srv/tier/ssd  ext4  rw,noatime,nofail,x-systemd.device-timeout=30  0  2
 # Namespace unifié : jamais monté si une branche manque (évite l'écriture sur la racine)
 /srv/tier/ssd:/srv/tier/hdd  /srv/storage  fuse.mergerfs  allow_other,posix_acl=true,use_ino,cache.files=off,dropcacheonclose=true,category.create=ff,minfreespace=40G,moveonenospc=true,fsname=storage,nofail,x-systemd.requires-mounts-for=/srv/tier/ssd,x-systemd.requires-mounts-for=/srv/tier/hdd  0  0
+# Rapide lié directement au SSD : un déplacement vers Rapide devient une copie vers le SSD (EXDEV)
+/srv/tier/ssd/Rapide  /srv/storage/Rapide  none  bind,nofail,x-systemd.requires-mounts-for=/srv/storage  0  0
 # Dossier sur le HDD uniquement, hors sauvegardes
 /srv/tier/hdd/Non-sauvegarde  /srv/storage/Non-sauvegarde  none  bind,nofail,x-systemd.requires-mounts-for=/srv/storage  0  0
 # Cache RAG reconstructible, taille fixe sur l'eMMC
